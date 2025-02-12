@@ -27,9 +27,10 @@ router.post("/", authenticateToken, (req, res) => {
 });
 
 // ✅ Get user's cart
-router.get("/", authenticateToken, (req, res) => {
+router.get("/getcart", authenticateToken, (req, res) => {
   console.log("[DEBUG] Fetching user's cart");
   const user_id = req.user.id;
+  console.log(user_id);
 
   db.query(
     "SELECT id, name, quantity, price FROM cart WHERE user_id = ?",
@@ -55,8 +56,13 @@ router.delete("/:id", authenticateToken, (req, res) => {
     [cart_id, user_id],
     (err) => {
       if (err) {
-        console.error("[ERROR] Database error while removing item from cart:", err);
-        return res.status(500).json({ error: "Failed to remove item from cart." });
+        console.error(
+          "[ERROR] Database error while removing item from cart:",
+          err
+        );
+        return res
+          .status(500)
+          .json({ error: "Failed to remove item from cart." });
       }
       res.status(200).json({ message: "Item removed from cart successfully." });
     }

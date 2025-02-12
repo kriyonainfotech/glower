@@ -16,9 +16,9 @@ app.use(cors());
 // Database Connection
 const db = mysql.createConnection({
   host: process.env.DB_HOST || "localhost",
-  user: process.env.DB_USER || "root",
-  password: process.env.DB_PASSWORD || "",
-  database: process.env.DB_NAME || "glower1",
+  user: process.env.DB_USER || "glower",
+  password: process.env.DB_PASSWORD || "Password@123",
+  database: process.env.DB_NAME || "glower",
 });
 
 // Check Database Connection
@@ -35,11 +35,13 @@ const SECRET_KEY = process.env.JWT_SECRET || "your_secret_key";
 
 // Generate JWT Token
 const generateToken = (user) => {
-  return jwt.sign({ id: user.id, email: user.email }, SECRET_KEY, { expiresIn: "2h" });
+  return jwt.sign({ id: user.id, email: user.email }, SECRET_KEY, {
+    expiresIn: "2h",
+  });
 };
 
 // Fetch All Users (Admin Only)
-app.get("/admin/users",  (req, res) => {
+app.get("/admin/users", (req, res) => {
   db.query("SELECT id, username, email FROM users", (err, results) => {
     if (err) {
       console.error("Error fetching users:", err);
@@ -75,22 +77,29 @@ app.post("/auth/login", (req, res) => {
   if (!email || !password) {
     return res.status(400).json({ error: "Email and password are required." });
   }
-  db.query("SELECT * FROM users WHERE email = ?", [email], async (err, results) => {
-    if (err) {
-      console.error("Database error:", err);
-      return res.status(500).json({ error: "Internal Server Error" });
+  db.query(
+    "SELECT * FROM users WHERE email = ?",
+    [email],
+    async (err, results) => {
+      if (err) {
+        console.error("Database error:", err);
+        return res.status(500).json({ error: "Internal Server Error" });
+      }
+      if (results.length === 0) {
+        return res.status(400).json({ error: "Invalid credentials." });
+      }
+      const user = results[0];
+      const isPasswordValid = await bcrypt.compare(password, user.password);
+      if (!isPasswordValid) {
+        return res.status(400).json({ error: "Invalid credentials." });
+      }
+      const token = generateToken(user);
+      res.status(200).json({
+        token,
+        user: { id: user.id, username: user.username, email: user.email },
+      });
     }
-    if (results.length === 0) {
-      return res.status(400).json({ error: "Invalid credentials." });
-    }
-    const user = results[0];
-    const isPasswordValid = await bcrypt.compare(password, user.password);
-    if (!isPasswordValid) {
-      return res.status(400).json({ error: "Invalid credentials." });
-    }
-    const token = generateToken(user);
-    res.status(200).json({ token, user: { id: user.id, username: user.username, email: user.email } });
-  });
+  );
 });
 
 // Protected Route Example
@@ -103,7 +112,20 @@ app.use("/api/cart", cartRoutes);
 
 // Order API Endpoint
 app.post("/api/orders", authMiddleware.authenticateToken, (req, res) => {
-  const { firstName, lastName, email, mobile, pincode, state, city, addressLine1, addressLine2, paymentMethod, cart, totalPrice } = req.body;
+  const {
+    firstName,
+    lastName,
+    email,
+    mobile,
+    pincode,
+    state,
+    city,
+    addressLine1,
+    addressLine2,
+    paymentMethod,
+    cart,
+    totalPrice,
+  } = req.body;
 
   if (!cart || !cart.length) {
     return res.status(400).json({ message: "Cart is empty." });
@@ -117,7 +139,20 @@ app.post("/api/orders", authMiddleware.authenticateToken, (req, res) => {
 
   db.query(
     orderQuery,
-    [userId, firstName, lastName, email, mobile, pincode, state, city, addressLine1, addressLine2, paymentMethod, totalPrice],
+    [
+      userId,
+      firstName,
+      lastName,
+      email,
+      mobile,
+      pincode,
+      state,
+      city,
+      addressLine1,
+      addressLine2,
+      paymentMethod,
+      totalPrice,
+    ],
     (err, result) => {
       if (err) {
         console.error("Error saving order:", err);
@@ -126,16 +161,20 @@ app.post("/api/orders", authMiddleware.authenticateToken, (req, res) => {
 
       const orderId = result.insertId;
 
-      const orderItemsData = cart.map((item) => {
-        if (!item.name) {
-          console.error("Error: Missing name for item", item);
-          return null;
-        }
-        return [orderId, item.name, item.quantity, item.price];
-      }).filter(item => item !== null);
+      const orderItemsData = cart
+        .map((item) => {
+          if (!item.name) {
+            console.error("Error: Missing name for item", item);
+            return null;
+          }
+          return [orderId, item.name, item.quantity, item.price];
+        })
+        .filter((item) => item !== null);
 
       if (orderItemsData.length === 0) {
-        return res.status(400).json({ message: "All items in the cart are missing names." });
+        return res
+          .status(400)
+          .json({ message: "All items in the cart are missing names." });
       }
 
       const orderItemsQuery = `
@@ -146,7 +185,9 @@ app.post("/api/orders", authMiddleware.authenticateToken, (req, res) => {
       db.query(orderItemsQuery, [orderItemsData], (err) => {
         if (err) {
           console.error("Error saving order items:", err);
-          return res.status(500).json({ message: "Failed to save order items." });
+          return res
+            .status(500)
+            .json({ message: "Failed to save order items." });
         }
         res.status(201).json({ message: "Order placed successfully." });
       });
@@ -170,7 +211,9 @@ app.post("/api/contact", (req, res) => {
   db.query(query, [fullName, email, mobile, message], (err) => {
     if (err) {
       console.error("Error saving contact form data:", err);
-      return res.status(500).json({ message: "Failed to save contact form data." });
+      return res
+        .status(500)
+        .json({ message: "Failed to save contact form data." });
     }
     res.status(201).json({ message: "Message received successfully!" });
   });
@@ -203,8 +246,6 @@ app.delete("/admin/contacts/:id", (req, res) => {
     res.status(200).json({ message: "Contact deleted successfully." });
   });
 });
-
-
 
 app.get("/admin/orders", (req, res) => {
   const sql = `
@@ -268,13 +309,26 @@ app.put("/admin/orders/:id/accept", (req, res) => {
 
     db.query(
       insertBillSql,
-      [bill.orderId, bill.customerName, bill.email, bill.totalPrice, bill.tax, bill.finalPrice, bill.paymentMethod, bill.date],
+      [
+        bill.orderId,
+        bill.customerName,
+        bill.email,
+        bill.totalPrice,
+        bill.tax,
+        bill.finalPrice,
+        bill.paymentMethod,
+        bill.date,
+      ],
       (err) => {
         if (err) {
           console.error("Error saving accepted order:", err);
-          return res.status(500).json({ error: "Failed to save accepted order." });
+          return res
+            .status(500)
+            .json({ error: "Failed to save accepted order." });
         }
-        res.status(200).json({ message: "Order accepted and bill generated.", bill });
+        res
+          .status(200)
+          .json({ message: "Order accepted and bill generated.", bill });
       }
     );
   });
@@ -286,7 +340,9 @@ app.get("/admin/accepted-orders", (req, res) => {
   db.query(sql, (err, results) => {
     if (err) {
       console.error("Error fetching accepted orders:", err);
-      return res.status(500).json({ error: "Failed to fetch accepted orders." });
+      return res
+        .status(500)
+        .json({ error: "Failed to fetch accepted orders." });
     }
     res.status(200).json(results);
   });
@@ -310,12 +366,12 @@ app.delete("/admin/orders/:id/reject", (req, res) => {
         console.error("Error deleting order:", err);
         return res.status(500).json({ error: "Failed to delete order." });
       }
-      res.status(200).json({ message: "Order rejected and deleted successfully." });
+      res
+        .status(200)
+        .json({ message: "Order rejected and deleted successfully." });
     });
   });
-}); 
-
-
+});
 
 // Update User API (Admin Only)
 app.put("/admin/users/:id", (req, res) => {
@@ -359,7 +415,6 @@ app.delete("/admin/users/:id", (req, res) => {
     res.status(200).json({ message: "User deleted successfully." });
   });
 });
-
 
 // Start Server
 const PORT = process.env.PORT || 5000;
